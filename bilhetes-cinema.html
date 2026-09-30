@@ -99,8 +99,11 @@
         <div class="row" id="scanControls">
           <button id="btnScan" class="btn primary">Ler QR</button>
           <button id="btnStopScan" class="btn hidden">Parar câmara</button>
+          <button id="btnFoto" class="btn">Ler de uma foto</button>
+          <input id="fotoQR" type="file" accept="image/*" capture="environment" class="hidden">
         </div>
         <div id="scanMsg" class="msg"></div>
+        <div class="count">Aponte ao QR a cerca de 20 cm, com o QR inteiro no ecrã. Se ele estiver noutro telemóvel, aumente o brilho desse ecrã.</div>
       </div>
       <div id="resultado"></div>
     </div>
@@ -136,8 +139,9 @@
   <div class="box">
     <h2 id="qrNome"></h2>
     <div id="qrBox"></div>
+    <p style="font-size:.8rem;color:#555;margin:0 0 12px">Se o botão não guardar, toque e segure no QR e escolha guardar imagem.</p>
     <div class="row" style="justify-content:center">
-      <button id="btnBaixar" class="btn primary">Baixar imagem</button>
+      <button id="btnBaixar" class="btn primary">Guardar / partilhar</button>
       <button id="btnFechar" class="btn">Fechar</button>
     </div>
   </div>
@@ -316,16 +320,54 @@ function abrirQR(b) {
     width: 240, height: 240,
     correctLevel: QRCode.CorrectLevel.M
   });
+  prepararImagemQR();
   $("modalQR").classList.remove("hidden");
+}
+function prepararImagemQR() {
+  const origem = $("qrBox").querySelector("canvas");
+  if (!origem) return;
+  const margem = 24;
+  const tam = origem.width + margem * 2;
+  const c = document.createElement("canvas");
+  c.width = tam; c.height = tam;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, tam, tam);
+  ctx.drawImage(origem, margem, margem);
+  qrAtual.canvas = c;
+  const img = document.createElement("img");
+  img.src = c.toDataURL("image/png");
+  img.alt = "QR do bilhete";
+  img.style.cssText = "width:240px;height:240px;display:block";
+  $("qrBox").innerHTML = "";
+  $("qrBox").appendChild(img);
 }
 $("btnFechar").onclick = () => $("modalQR").classList.add("hidden");
 $("btnBaixar").onclick = () => {
-  const canvas = $("qrBox").querySelector("canvas");
-  if (!canvas) return;
-  const link = document.createElement("a");
-  link.download = "bilhete-" + (qrAtual.nome || "qr").replace(/[^\p{L}\p{N}]+/gu, "-") + ".png";
-  link.href = canvas.toDataURL("image/png");
-  link.click();
+  if (!qrAtual || !qrAtual.canvas) return;
+  const nomeFicheiro = "bilhete-" + (qrAtual.nome || "qr").replace(/[^\p{L}\p{N}]+/gu, "-") + ".png";
+  qrAtual.canvas.toBlob(async blob => {
+    if (!blob) return;
+    const ficheiro = new File([blob], nomeFicheiro, { type: "image/png" });
+    // 1) Menu de partilha do telemóvel (guardar na galeria, WhatsApp, etc.)
+    if (navigator.canShare && navigator.canShare({ files: [ficheiro] })) {
+      try {
+        await navigator.share({ files: [ficheiro], title: qrAtual.nome });
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") return;
+      }
+    }
+    // 2) Alternativa: download normal
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nomeFicheiro;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }, "image/png");
 };
 
 /* ---------- Validação ---------- */
@@ -397,7 +439,7 @@ async function iniciarScanner() {
     scanner = new Html5Qrcode("reader");
     await scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 240, height: 240 } },
+      { fps: 15, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
       async texto => {
         await pararScanner();
         validar(extrairId(texto));
@@ -419,6 +461,24 @@ async function pararScanner() {
 }
 $("btnScan").onclick = iniciarScanner;
 $("btnStopScan").onclick = pararScanner;
+
+$("btnFoto").onclick = () => $("fotoQR").click();
+$("fotoQR").onchange = async e => {
+  const ficheiro = e.target.files[0];
+  e.target.value = "";
+  if (!ficheiro) return;
+  $("scanMsg").textContent = "A ler a foto…";
+  await pararScanner();
+  try {
+    const leitor = new Html5Qrcode("reader");
+    const texto = await leitor.scanFile(ficheiro, false);
+    try { leitor.clear(); } catch (err) { /* ignorar */ }
+    $("scanMsg").textContent = "";
+    validar(extrairId(texto));
+  } catch (err) {
+    $("scanMsg").textContent = "Não encontrei nenhum QR na foto. Tente de novo, mais perto e com o QR inteiro na imagem.";
+  }
+};
 </script>
 </body>
 </html>
