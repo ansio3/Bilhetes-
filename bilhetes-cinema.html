@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bilhetes · Sessão de Cinema</title>
+<style>
+  :root{
+    --bg:#14101c; --surface:#211a2e; --line:#3a2f4d; --text:#f2eef8; --muted:#a79bbd;
+    --gold:#f5b642; --ok:#3ecf8e; --bad:#ff5c6c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.45}
+  h1,h2{font-family:Palatino,"Palatino Linotype",Georgia,serif;font-weight:700;margin:0}
+  header{padding:18px 16px 8px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  header h1{font-size:1.4rem}
+  main{max-width:640px;margin:0 auto;padding:0 16px 48px}
+  .hidden{display:none!important}
+  button,input{font:inherit}
+  input[type=text],input[type=email],input[type=password]{
+    width:100%;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+  input:focus-visible,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  label{display:block;margin:12px 0 4px;color:var(--muted);font-size:.9rem}
+  .btn{padding:11px 16px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);cursor:pointer}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:#241a05;font-weight:700}
+  .btn.danger{color:var(--bad)}
+  .btn.small{padding:7px 10px;font-size:.85rem}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
+  .tabs{display:flex;gap:8px;margin-top:8px}
+  .tabs .btn{flex:1}
+  .tabs .btn.active{border-color:var(--gold);color:var(--gold)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .check{display:flex;gap:8px;align-items:center;margin-top:12px}
+  .check input{width:20px;height:20px}
+  .msg{margin-top:10px;color:var(--bad);font-size:.9rem;min-height:1.2em}
+  /* lista */
+  .item{border-top:1px dashed var(--line);padding:12px 0}
+  .item:first-child{border-top:none}
+  .item .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .item .name{font-weight:600;word-break:break-word}
+  .badge{padding:3px 9px;border-radius:99px;font-size:.8rem;font-weight:700;white-space:nowrap}
+  .badge.ok{background:rgba(62,207,142,.15);color:var(--ok)}
+  .badge.bad{background:rgba(255,92,108,.15);color:var(--bad)}
+  .item .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .count{color:var(--muted);font-size:.9rem;margin-top:4px}
+  /* scanner e resultado */
+  #reader{width:100%;border-radius:12px;overflow:hidden;background:#000}
+  .result{border-radius:12px;padding:22px 16px;text-align:center;margin-top:16px;border:2px solid var(--line)}
+  .result.ok{border-color:var(--ok);background:rgba(62,207,142,.1)}
+  .result.bad{border-color:var(--bad);background:rgba(255,92,108,.1)}
+  .result.warn{border-color:var(--gold);background:rgba(245,182,66,.1)}
+  .result .status{font-size:1.8rem;font-weight:800}
+  .result.ok .status{color:var(--ok)} .result.bad .status{color:var(--bad)} .result.warn .status{color:var(--gold)}
+  .result .who{font-family:Palatino,Georgia,serif;font-size:1.5rem;margin:8px 0;word-break:break-word}
+  .result .info{color:var(--muted);font-size:.95rem}
+  .result .row{justify-content:center;margin-top:14px}
+  /* modal QR */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .modal .box{background:#fff;color:#111;border-radius:14px;padding:20px;text-align:center;max-width:320px;width:100%}
+  .modal .box h2{font-size:1.2rem;margin-bottom:12px;word-break:break-word}
+  #qrBox{display:flex;justify-content:center;margin-bottom:14px}
+  .modal .btn{color:#111;background:#eee;border-color:#ddd}
+  .modal .btn.primary{background:var(--gold);border-color:var(--gold)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sessão de Cinema</h1>
+  <button id="btnSair" class="btn small hidden">Sair</button>
+</header>
+
+<main>
+  <!-- LOGIN -->
+  <section id="viewLogin" class="panel">
+    <h2>Entrar</h2>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="senha">Palavra-passe</label>
+    <input id="senha" type="password" autocomplete="current-password">
+    <div class="row" style="margin-top:14px">
+      <button id="btnEntrar" class="btn primary">Entrar</button>
+    </div>
+    <div id="loginMsg" class="msg"></div>
+  </section>
+
+  <!-- APP -->
+  <section id="viewApp" class="hidden">
+    <div class="tabs">
+      <button id="tabValidar" class="btn active">Validar entrada</button>
+      <button id="tabBilhetes" class="btn">Bilhetes</button>
+    </div>
+
+    <!-- Validar -->
+    <div id="paneValidar">
+      <div class="panel">
+        <div id="reader" class="hidden"></div>
+        <div class="row" id="scanControls">
+          <button id="btnScan" class="btn primary">Ler QR</button>
+          <button id="btnStopScan" class="btn hidden">Parar câmara</button>
+        </div>
+        <div id="scanMsg" class="msg"></div>
+      </div>
+      <div id="resultado"></div>
+    </div>
+
+    <!-- Bilhetes -->
+    <div id="paneBilhetes" class="hidden">
+      <div class="panel">
+        <h2>Novo bilhete</h2>
+        <label for="nome">Nome da pessoa</label>
+        <input id="nome" type="text" autocomplete="off">
+        <div class="check">
+          <input id="pagoNovo" type="checkbox">
+          <label for="pagoNovo" style="margin:0;color:var(--text)">Já pagou</label>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button id="btnAdd" class="btn primary">Criar bilhete</button>
+        </div>
+        <div id="addMsg" class="msg"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Lista</h2>
+        <input id="busca" type="text" placeholder="Pesquisar por nome" style="margin-top:10px">
+        <div id="contagem" class="count"></div>
+        <div id="lista"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Modal QR -->
+<div id="modalQR" class="modal hidden">
+  <div class="box">
+    <h2 id="qrNome"></h2>
+    <div id="qrBox"></div>
+    <div class="row" style="justify-content:center">
+      <button id="btnBaixar" class="btn primary">Baixar imagem</button>
+      <button id="btnFechar" class="btn">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ====== 1) COLE AQUI A CONFIGURAÇÃO DO SEU PROJETO FIREBASE ====== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBbVwoyZTkkyJ6LLo-LHvTq1qrmyEOzfpU",
+  authDomain: "bilhetes-cinema.firebaseapp.com",
+  projectId: "bilhetes-cinema",
+  storageBucket: "bilhetes-cinema.firebasestorage.app",
+  messagingSenderId: "950743722306",
+  appId: "1:950743722306:web:bad1de2c53f2566c0d00db"
+};
+/* ================================================================= */
+
+const COLECAO = "bilhetes";
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const $ = id => document.getElementById(id);
+let bilhetes = [];
+let unsub = null;
+let scanner = null;
+let qrAtual = null;
+const idDaURL = new URLSearchParams(location.search).get("id");
+
+/* ---------- Autenticação ---------- */
+$("btnEntrar").onclick = async () => {
+  $("loginMsg").textContent = "";
+  try {
+    await signInWithEmailAndPassword(auth, $("email").value.trim(), $("senha").value);
+  } catch (e) {
+    $("loginMsg").textContent = "Email ou palavra-passe incorretos.";
+  }
+};
+$("senha").addEventListener("keydown", e => { if (e.key === "Enter") $("btnEntrar").click(); });
+$("btnSair").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    $("viewLogin").classList.add("hidden");
+    $("viewApp").classList.remove("hidden");
+    $("btnSair").classList.remove("hidden");
+    iniciarLista();
+    if (idDaURL) validar(idDaURL);
+  } else {
+    pararScanner();
+    if (unsub) { unsub(); unsub = null; }
+    $("viewLogin").classList.remove("hidden");
+    $("viewApp").classList.add("hidden");
+    $("btnSair").classList.add("hidden");
+  }
+});
+
+/* ---------- Abas ---------- */
+function mostrarAba(nome) {
+  const validar = nome === "validar";
+  $("paneValidar").classList.toggle("hidden", !validar);
+  $("paneBilhetes").classList.toggle("hidden", validar);
+  $("tabValidar").classList.toggle("active", validar);
+  $("tabBilhetes").classList.toggle("active", !validar);
+  if (!validar) pararScanner();
+}
+$("tabValidar").onclick = () => mostrarAba("validar");
+$("tabBilhetes").onclick = () => mostrarAba("bilhetes");
+
+/* ---------- Lista de bilhetes ---------- */
+function iniciarLista() {
+  if (unsub) return;
+  const q = query(collection(db, COLECAO), orderBy("criadoEm", "desc"));
+  unsub = onSnapshot(q, snap => {
+    bilhetes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    desenharLista();
+  }, err => {
+    $("addMsg").textContent = "Erro ao carregar a lista: " + err.message;
+  });
+}
+
+function desenharLista() {
+  const termo = $("busca").value.trim().toLowerCase();
+  const filtrados = bilhetes.filter(b => (b.nome || "").toLowerCase().includes(termo));
+  const pagos = bilhetes.filter(b => b.pago).length;
+  const entraram = bilhetes.filter(b => b.entrou).length;
+  $("contagem").textContent =
+    `${bilhetes.length} bilhetes · ${pagos} pagos · ${entraram} já entraram`;
+
+  const lista = $("lista");
+  lista.innerHTML = "";
+  filtrados.forEach(b => {
+    const el = document.createElement("div");
+    el.className = "item";
+
+    const top = document.createElement("div");
+    top.className = "top";
+    const nome = document.createElement("span");
+    nome.className = "name";
+    nome.textContent = b.nome;
+    const badge = document.createElement("span");
+    badge.className = "badge " + (b.pago ? "ok" : "bad");
+    badge.textContent = b.pago ? "Pago" : "Não pago";
+    top.append(nome, badge);
+
+    const acoes = document.createElement("div");
+    acoes.className = "actions";
+    acoes.append(
+      botao("Ver QR", "", () => abrirQR(b)),
+      botao(b.pago ? "Marcar não pago" : "Marcar pago", "", () =>
+        updateDoc(doc(db, COLECAO, b.id), { pago: !b.pago })),
+      botao("Apagar", "danger", () => {
+        if (confirm(`Apagar o bilhete de ${b.nome}?`)) deleteDoc(doc(db, COLECAO, b.id));
+      })
+    );
+    if (b.entrou) {
+      const tag = document.createElement("span");
+      tag.className = "count";
+      tag.textContent = "Já entrou";
+      acoes.append(tag);
+    }
+    el.append(top, acoes);
+    lista.append(el);
+  });
+}
+
+function botao(texto, extra, fn) {
+  const b = document.createElement("button");
+  b.className = "btn small " + extra;
+  b.textContent = texto;
+  b.onclick = fn;
+  return b;
+}
+$("busca").addEventListener("input", desenharLista);
+
+$("btnAdd").onclick = async () => {
+  const nome = $("nome").value.trim();
+  $("addMsg").textContent = "";
+  if (!nome) { $("addMsg").textContent = "Escreva o nome da pessoa."; return; }
+  $("btnAdd").disabled = true;
+  try {
+    const ref = await addDoc(collection(db, COLECAO), {
+      nome,
+      pago: $("pagoNovo").checked,
+      entrou: false,
+      criadoEm: serverTimestamp()
+    });
+    $("nome").value = "";
+    $("pagoNovo").checked = false;
+    abrirQR({ id: ref.id, nome });
+  } catch (e) {
+    $("addMsg").textContent = "Não foi possível criar: " + e.message;
+  }
+  $("btnAdd").disabled = false;
+};
+
+/* ---------- QR ---------- */
+function urlDoBilhete(id) {
+  return location.origin + location.pathname + "?id=" + id;
+}
+function abrirQR(b) {
+  $("qrNome").textContent = b.nome;
+  $("qrBox").innerHTML = "";
+  qrAtual = { nome: b.nome };
+  new QRCode($("qrBox"), {
+    text: urlDoBilhete(b.id),
+    width: 240, height: 240,
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  $("modalQR").classList.remove("hidden");
+}
+$("btnFechar").onclick = () => $("modalQR").classList.add("hidden");
+$("btnBaixar").onclick = () => {
+  const canvas = $("qrBox").querySelector("canvas");
+  if (!canvas) return;
+  const link = document.createElement("a");
+  link.download = "bilhete-" + (qrAtual.nome || "qr").replace(/[^\p{L}\p{N}]+/gu, "-") + ".png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+};
+
+/* ---------- Validação ---------- */
+function extrairId(texto) {
+  try { return new URL(texto).searchParams.get("id") || texto; }
+  catch { return texto; }
+}
+
+async function validar(id) {
+  const box = $("resultado");
+  box.innerHTML = "";
+  let snap;
+  try {
+    snap = await getDoc(doc(db, COLECAO, id));
+  } catch (e) {
+    mostrarResultado("bad", "Erro", "", "Não foi possível consultar: " + e.message);
+    return;
+  }
+  if (!snap.exists()) {
+    mostrarResultado("bad", "Bilhete inválido", "", "Este código não existe na lista.");
+    return;
+  }
+  const b = snap.data();
+  const acoes = [];
+
+  if (!b.pago) {
+    acoes.push(botao("Marcar como pago", "primary", async () => {
+      await updateDoc(doc(db, COLECAO, id), { pago: true });
+      validar(id);
+    }));
+    mostrarResultado("bad", "❌ Não pago", b.nome, "Pagamento em falta.", acoes);
+  } else if (b.entrou) {
+    const quando = b.entrouEm && b.entrouEm.toDate ? b.entrouEm.toDate().toLocaleString("pt-PT") : "";
+    mostrarResultado("warn", "⚠️ Já entrou", b.nome, quando ? "Entrada registada em " + quando : "Entrada já registada.");
+  } else {
+    acoes.push(botao("Confirmar entrada", "primary", async () => {
+      await updateDoc(doc(db, COLECAO, id), { entrou: true, entrouEm: serverTimestamp() });
+      validar(id);
+    }));
+    mostrarResultado("ok", "✅ Pago", b.nome, "Pode entrar.", acoes);
+  }
+}
+
+function mostrarResultado(tipo, status, nome, info, acoes = []) {
+  const box = $("resultado");
+  box.innerHTML = "";
+  const r = document.createElement("div");
+  r.className = "result " + tipo;
+  const s = document.createElement("div"); s.className = "status"; s.textContent = status;
+  const w = document.createElement("div"); w.className = "who"; w.textContent = nome;
+  const i = document.createElement("div"); i.className = "info"; i.textContent = info;
+  r.append(s, w, i);
+  const row = document.createElement("div");
+  row.className = "row";
+  acoes.forEach(a => row.append(a));
+  row.append(botao("Ler próximo", "", () => { box.innerHTML = ""; iniciarScanner(); }));
+  r.append(row);
+  box.append(r);
+}
+
+/* ---------- Câmara ---------- */
+async function iniciarScanner() {
+  $("scanMsg").textContent = "";
+  $("resultado").innerHTML = "";
+  $("reader").classList.remove("hidden");
+  $("btnScan").classList.add("hidden");
+  $("btnStopScan").classList.remove("hidden");
+  try {
+    scanner = new Html5Qrcode("reader");
+    await scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 240, height: 240 } },
+      async texto => {
+        await pararScanner();
+        validar(extrairId(texto));
+      }
+    );
+  } catch (e) {
+    $("scanMsg").textContent = "Não foi possível abrir a câmara. Permita o acesso à câmara no navegador.";
+    await pararScanner();
+  }
+}
+async function pararScanner() {
+  if (scanner) {
+    try { await scanner.stop(); scanner.clear(); } catch (e) { /* já parada */ }
+    scanner = null;
+  }
+  $("reader").classList.add("hidden");
+  $("btnScan").classList.remove("hidden");
+  $("btnStopScan").classList.add("hidden");
+}
+$("btnScan").onclick = iniciarScanner;
+$("btnStopScan").onclick = pararScanner;
+</script>
+</body>
+</html>
